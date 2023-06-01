@@ -50,12 +50,21 @@ func resourcemimirRuleGroupAlerting() *schema.Resource {
 							Description:  "The PromQL expression to evaluate.",
 							Required:     true,
 							ValidateFunc: validatePromQLExpr,
+							StateFunc:    formatPromQLExpr,
 						},
 						"for": {
 							Type:         schema.TypeString,
 							Description:  "The duration for which the condition must be true before an alert fires.",
 							Optional:     true,
 							ValidateFunc: validateDuration,
+							StateFunc:    formatDuration,
+						},
+						"keep_firing_for": {
+							Type:         schema.TypeString,
+							Description:  "How long an alert will continue firing after the condition that triggered it has cleared.",
+							Optional:     true,
+							ValidateFunc: validateDuration,
+							StateFunc:    formatDuration,
 						},
 						"annotations": {
 							Type:         schema.TypeMap,
@@ -201,12 +210,18 @@ func expandAlertingRules(v []interface{}) []alertingRule {
 		}
 
 		if raw, ok := data["expr"]; ok {
-			rule.Expr = raw.(string)
+			rule.Expr = formatPromQLExpr(raw)
 		}
 
 		if raw, ok := data["for"]; ok {
 			if raw.(string) != "" {
 				rule.For = raw.(string)
+			}
+		}
+
+		if raw, ok := data["keep_firing_for"]; ok {
+			if raw.(string) != "" {
+				rule.KeepFiringFor = raw.(string)
 			}
 		}
 
@@ -238,10 +253,13 @@ func flattenAlertingRules(v []alertingRule) []map[string]interface{} {
 	for _, v := range v {
 		rule := make(map[string]interface{})
 		rule["alert"] = v.Alert
-		rule["expr"] = v.Expr
+		rule["expr"] = formatPromQLExpr(v.Expr)
 
 		if v.For != "" {
 			rule["for"] = v.For
+		}
+		if v.KeepFiringFor != "" {
+			rule["keep_firing_for"] = v.KeepFiringFor
 		}
 		if v.Labels != nil {
 			rule["labels"] = v.Labels
@@ -268,11 +286,12 @@ func validateAlertingRuleName(v interface{}, k string) (ws []string, errors []er
 }
 
 type alertingRule struct {
-	Alert       string            `yaml:"alert"`
-	Expr        string            `yaml:"expr"`
-	For         string            `yaml:"for,omitempty"`
-	Labels      map[string]string `yaml:"labels,omitempty"`
-	Annotations map[string]string `yaml:"annotations,omitempty"`
+	Alert         string            `yaml:"alert"`
+	Expr          string            `yaml:"expr"`
+	For           string            `yaml:"for,omitempty"`
+	KeepFiringFor string            `yaml:"keep_firing_for,omitempty"`
+	Labels        map[string]string `yaml:"labels,omitempty"`
+	Annotations   map[string]string `yaml:"annotations,omitempty"`
 }
 
 type alertingRuleGroup struct {
